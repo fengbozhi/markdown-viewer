@@ -1,0 +1,21 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Xcode / Swift
+build/
+DerivedData/
+*.swiftmodule
+*.dSYM
+
+# 构建产物（Releases 分发，不入库）
+Markdown Viewer.app
+
+# 编辑器
+.vscode/
+.idea/
+
+# 临时文件
+*.log
+*.tmp
