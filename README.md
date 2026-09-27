@@ -48,7 +48,7 @@
 ### 方式二：从源码构建
 
 ```bash
-git clone https://github.com/<你的用户名>/markdown-viewer.git
+git clone https://github.com/fengbozhi/markdown-viewer.git
 cd markdown-viewer
 ./build.sh
 ```
