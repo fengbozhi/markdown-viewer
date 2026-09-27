@@ -235,6 +235,50 @@ enum MarkdownRenderer {
         .mermaid-chart svg { max-width: 100%; height: auto; }
         mark.mdv-hit { background: \(markHit); color: inherit; border-radius: 2px; }
         mark.mdv-current { background: \(markCur); color: inherit; border-radius: 2px; }
+        .mdv-transform {
+          display: inline-flex;
+          align-items: center;
+          gap: 10px;
+          background: var(--color-neutral-muted, rgba(128,128,128,0.08));
+          border: 1px solid var(--color-border-default, rgba(128,128,128,0.15));
+          border-radius: 8px;
+          padding: 6px 10px;
+          margin: 2px 0;
+          vertical-align: middle;
+          line-height: 1.3;
+        }
+        .mdv-transform-side {
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          min-width: 0;
+          max-width: 160px;
+        }
+        .mdv-transform-icon { font-size: 1.1em; line-height: 1; margin-bottom: 2px; }
+        .mdv-transform-name {
+          font-size: 0.9em;
+          font-weight: 500;
+          color: var(--color-fg-default, inherit);
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .mdv-transform-url {
+          font-size: 0.75em;
+          color: var(--color-fg-muted, #888);
+          max-width: 100%;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          white-space: nowrap;
+        }
+        .mdv-transform-arrow {
+          color: var(--color-fg-muted, #999);
+          font-weight: bold;
+          font-size: 1.1em;
+          padding: 0 2px;
+          flex-shrink: 0;
+        }
         \(contentCSS)
         \(codeCSS)
         </style>
@@ -257,6 +301,8 @@ enum MarkdownRenderer {
               }
             });
           }
+          // 美化图片转换说明: ![原图名](本地路径) -> ![VL模型描述](MinIO URL)
+          applyImageTransforms(document.getElementById("content"));
           // Mermaid 流程图渲染:把 ```mermaid 代码块转换为图表
           if (window.mermaid) {
             mermaid.initialize({
@@ -286,6 +332,62 @@ enum MarkdownRenderer {
           }
         } catch (e) {
           document.getElementById("content").textContent = "渲染出错: " + e.message;
+        }
+        // 美化图片转换说明: ![alt1](url1) -> ![alt2](url2)
+        function applyImageTransforms(root) {
+          var transformPattern = /!\\[([^\\]]*)\\]\\(([^)]+)\\)\\s*->\\s*!\\[([^\\]]*)\\]\\(([^)]+)\\)/g;
+          function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;"); }
+          function side(icon, alt, url) {
+            return '<span class="mdv-transform-side">' +
+              '<span class="mdv-transform-icon">' + icon + '</span>' +
+              '<span class="mdv-transform-name" title="' + esc(alt) + '">' + esc(alt || "图片") + '</span>' +
+              '<span class="mdv-transform-url" title="' + esc(url) + '">' + esc(url) + '</span>' +
+              '</span>';
+          }
+          function makeCard(alt1, url1, alt2, url2) {
+            return '<span class="mdv-transform">' +
+              side("🖼", alt1, url1) +
+              '<span class="mdv-transform-arrow">→</span>' +
+              side("🖼", alt2, url2) +
+              '</span>';
+          }
+          function replaceInText(text) {
+            transformPattern.lastIndex = 0;
+            if (!transformPattern.test(text)) return null;
+            transformPattern.lastIndex = 0;
+            return text.replace(transformPattern, function (_, alt1, url1, alt2, url2) {
+              return makeCard(alt1, url1, alt2, url2);
+            });
+          }
+
+          // 1) 处理行内代码中的转换说明(多行代码块<pre><code>保持原样)
+          root.querySelectorAll("code").forEach(function (code) {
+            if (code.closest("pre")) return;
+            var html = replaceInText(code.textContent);
+            if (!html) return;
+            var wrapper = document.createElement("span");
+            wrapper.innerHTML = html;
+            code.parentNode.replaceChild(wrapper, code);
+          });
+
+          // 2) 处理普通文本节点
+          var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: function(node) {
+              var el = node.parentElement;
+              if (!el || el.closest("code, pre")) return NodeFilter.FILTER_REJECT;
+              transformPattern.lastIndex = 0;
+              return transformPattern.test(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+            }
+          });
+          var nodes = [];
+          while (walker.nextNode()) nodes.push(walker.currentNode);
+          nodes.forEach(function(node) {
+            var html = replaceInText(node.nodeValue);
+            if (!html) return;
+            var span = document.createElement("span");
+            span.innerHTML = html;
+            node.parentNode.replaceChild(span, node);
+          });
         }
         // 双击图片 → 通知原生弹窗全屏显示
         document.addEventListener("dblclick", function (e) {
