@@ -367,6 +367,8 @@ enum MarkdownRenderer {
         try {
           var MD = \(mdLiteral);
           document.getElementById("content").innerHTML = marked.parse(MD, { gfm: true, breaks: false });
+          // 修复 marked.js 对中文紧接 ** 的加粗/斜体解析失败(如 **生成提示词：**根据)
+          fixCJKEmphasis(document.getElementById("content"));
           if (window.hljs) {
             hljs.configure({ ignoreUnescapedHTML: true });
             document.querySelectorAll("pre code").forEach(function (el) {
@@ -408,6 +410,41 @@ enum MarkdownRenderer {
           }
         } catch (e) {
           document.getElementById("content").textContent = "渲染出错: " + e.message;
+        }
+        // 修复中文边界导致的强调符解析失败(**加粗*斜体*)
+        function fixCJKEmphasis(root) {
+          var strongPattern = /(?<!\\*)\\*\\*([^\\*]+?)\\*\\*(?!\\*)/g;
+          var emPattern = /(?<!\\*)\\*([^\\*\\n]+?)\\*(?!\\*)/g;
+          function replaceInNode(text) {
+            var changed = false;
+            strongPattern.lastIndex = 0;
+            emPattern.lastIndex = 0;
+            var hasStrong = strongPattern.test(text);
+            var hasEm = emPattern.test(text);
+            if (!hasStrong && !hasEm) return null;
+            var html = text
+              .replace(strongPattern, "<strong>$1</strong>")
+              .replace(emPattern, "<em>$1</em>");
+            return html;
+          }
+          var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: function(node) {
+              var el = node.parentElement;
+              if (!el || el.closest("code, pre, strong, em")) return NodeFilter.FILTER_REJECT;
+              strongPattern.lastIndex = 0;
+              emPattern.lastIndex = 0;
+              return (strongPattern.test(node.nodeValue) || emPattern.test(node.nodeValue)) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+            }
+          });
+          var nodes = [];
+          while (walker.nextNode()) nodes.push(walker.currentNode);
+          nodes.forEach(function(node) {
+            var html = replaceInNode(node.nodeValue);
+            if (!html) return;
+            var span = document.createElement("span");
+            span.innerHTML = html;
+            node.parentNode.replaceChild(span, node);
+          });
         }
         // Carbon 风格代码块:加窗口按钮与行号
         function styleCodeBlocks() {
