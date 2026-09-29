@@ -77,9 +77,9 @@ enum MarkdownRenderer {
     static let hljsJS: String = loadResource("highlight.min", "js") ?? ""
     static let mermaidJS: String = loadResource("mermaid.min", "js") ?? ""
     static let githubCSS: String = loadResource("github-markdown-light", "css") ?? ""
-    static let hljsCSS: String = loadResource("github", "css") ?? ""
+    static let hljsCSS: String = loadResource("atom-one-dark", "css") ?? ""
     static let githubDarkCSS: String = loadResource("github-markdown-dark", "css") ?? ""
-    static let hljsDarkCSS: String = loadResource("github-dark", "css") ?? ""
+    static let hljsDarkCSS: String = loadResource("atom-one-dark", "css") ?? ""
 
     static func loadResource(_ name: String, _ ext: String) -> String? {
         guard let url = Bundle.main.url(forResource: name, withExtension: ext),
@@ -205,6 +205,8 @@ enum MarkdownRenderer {
         let bodyBg = dark ? "#0d1117" : "#ffffff"
         let markHit = dark ? "rgba(187, 128, 9, 0.45)" : "#ffe58f"
         let markCur = dark ? "rgba(249, 168, 37, 0.9)" : "#ffab40"
+        let carbonBg = "#282c34"
+        let carbonHeader = "#21252b"
 
         return """
         <!DOCTYPE html>
@@ -212,6 +214,8 @@ enum MarkdownRenderer {
         <head>
         <meta charset="utf-8">
         <style>
+        \(contentCSS)
+        \(codeCSS)
         html, body { margin: 0; padding: 0; background: \(bodyBg); }
         .markdown-body {
           box-sizing: border-box;
@@ -225,6 +229,61 @@ enum MarkdownRenderer {
           background-color: transparent;
           cursor: zoom-in;
           -webkit-user-drag: none;
+        }
+        .markdown-body pre {
+          position: relative;
+          background: \(carbonBg);
+          border-radius: 12px;
+          padding: 0;
+          margin: 16px 0;
+          box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+          overflow: hidden;
+        }
+        .markdown-body pre .code-window-header {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          height: 32px;
+          padding: 0 14px;
+          background: \(carbonHeader);
+          border-bottom: 1px solid rgba(255,255,255,0.06);
+          -webkit-user-select: none;
+          user-select: none;
+        }
+        .markdown-body pre .code-window-header span {
+          width: 10px;
+          height: 10px;
+          border-radius: 50%;
+          flex-shrink: 0;
+        }
+        .markdown-body pre .code-window-header span:nth-child(1) { background: #ff5f56; }
+        .markdown-body pre .code-window-header span:nth-child(2) { background: #ffbd2e; }
+        .markdown-body pre .code-window-header span:nth-child(3) { background: #27c93f; }
+        .markdown-body pre code.hljs {
+          display: block;
+          background: \(carbonBg) !important;
+          color: #abb2bf;
+          padding: 12px 16px 16px 0;
+          margin: 0;
+          font-family: "SF Mono", "JetBrains Mono", "Fira Code", "Menlo", "Monaco", monospace;
+          font-size: 13px;
+          line-height: 1.6;
+          overflow-x: auto;
+        }
+        .markdown-body pre code .code-line {
+          display: block;
+          padding-left: 3.2em;
+          position: relative;
+        }
+        .markdown-body pre code .code-line::before {
+          content: attr(data-line);
+          position: absolute;
+          left: 0;
+          width: 2.2em;
+          text-align: right;
+          color: #4b5263;
+          -webkit-user-select: none;
+          user-select: none;
         }
         .mermaid-chart {
           display: flex;
@@ -279,8 +338,23 @@ enum MarkdownRenderer {
           padding: 0 2px;
           flex-shrink: 0;
         }
-        \(contentCSS)
-        \(codeCSS)
+        /* 取消 GitHub 默认的 pre 内边距与背景,交由自定义 Carbon 样式接管 */
+        .markdown-body pre,
+        .markdown-body pre > code {
+          background: \(carbonBg) !important;
+        }
+        .markdown-body pre code.hljs {
+          background: \(carbonBg) !important;
+        }
+        /* 行内代码保持浅色胶囊样式(不适用于代码块) */
+        .markdown-body :not(pre) > code {
+          background: \(dark ? "rgba(110,118,129,0.4)" : "rgba(175,184,193,0.2)");
+          color: \(dark ? "#e6edf3" : "#1f2328");
+          border-radius: 6px;
+          padding: 0.2em 0.4em;
+          font-family: "SF Mono", "Menlo", "Monaco", monospace;
+          font-size: 0.88em;
+        }
         </style>
         </head>
         <body>
@@ -303,6 +377,8 @@ enum MarkdownRenderer {
           }
           // 美化图片转换说明: ![原图名](本地路径) -> ![VL模型描述](MinIO URL)
           applyImageTransforms(document.getElementById("content"));
+          // Carbon 风格代码块:窗口按钮 + 行号
+          styleCodeBlocks();
           // Mermaid 流程图渲染:把 ```mermaid 代码块转换为图表
           if (window.mermaid) {
             mermaid.initialize({
@@ -332,6 +408,27 @@ enum MarkdownRenderer {
           }
         } catch (e) {
           document.getElementById("content").textContent = "渲染出错: " + e.message;
+        }
+        // Carbon 风格代码块:加窗口按钮与行号
+        function styleCodeBlocks() {
+          document.querySelectorAll("pre").forEach(function (pre) {
+            if (pre.querySelector(".code-window-header")) return;
+            if (pre.querySelector(".mermaid-chart")) return;
+            var code = pre.querySelector("code");
+            if (!code) return;
+            // 顶部窗口按钮
+            var header = document.createElement("div");
+            header.className = "code-window-header";
+            header.innerHTML = "<span></span><span></span><span></span>";
+            pre.insertBefore(header, pre.firstChild);
+            // 行号
+            var text = code.innerHTML;
+            var lines = text.split("\\n");
+            var numbered = lines.map(function (line, idx) {
+              return '<span class="code-line" data-line="' + (idx + 1) + '">' + (line || " ") + '</span>';
+            }).join("\\n");
+            code.innerHTML = numbered;
+          });
         }
         // 美化图片转换说明: ![alt1](url1) -> ![alt2](url2)
         function applyImageTransforms(root) {

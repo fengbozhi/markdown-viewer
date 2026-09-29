@@ -15,8 +15,8 @@ swiftc -O -parse-as-library \
 
 # 复制渲染引擎资源
 cp src/marked.min.js src/highlight.min.js src/mermaid.min.js \
-   src/github.min.css src/github-markdown-light.css \
-   src/github-dark.min.css src/github-markdown-dark.css \
+   src/atom-one-dark.min.css \
+   src/github-markdown-light.css src/github-markdown-dark.css \
    "$APP/Contents/Resources/"
 
 # 临时签名(本机运行)
