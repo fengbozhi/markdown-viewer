@@ -19,3 +19,6 @@ Markdown Viewer.app
 # 临时文件
 *.log
 *.tmp
+
+# WorkBuddy 工具数据
+.workbuddy/
