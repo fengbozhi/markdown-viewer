@@ -77,9 +77,9 @@ enum MarkdownRenderer {
     static let hljsJS: String = loadResource("highlight.min", "js") ?? ""
     static let mermaidJS: String = loadResource("mermaid.min", "js") ?? ""
     static let githubCSS: String = loadResource("github-markdown-light", "css") ?? ""
-    static let hljsCSS: String = loadResource("atom-one-dark", "css") ?? ""
+    static let hljsCSS: String = loadResource("atom-one-dark.min", "css") ?? ""
     static let githubDarkCSS: String = loadResource("github-markdown-dark", "css") ?? ""
-    static let hljsDarkCSS: String = loadResource("atom-one-dark", "css") ?? ""
+    static let hljsDarkCSS: String = loadResource("atom-one-dark.min", "css") ?? ""
 
     static func loadResource(_ name: String, _ ext: String) -> String? {
         guard let url = Bundle.main.url(forResource: name, withExtension: ext),
@@ -262,7 +262,6 @@ enum MarkdownRenderer {
         .markdown-body pre code.hljs {
           display: block;
           background: \(carbonBg) !important;
-          color: #abb2bf;
           padding: 12px 16px 16px 0;
           margin: 0;
           font-family: "SF Mono", "JetBrains Mono", "Fira Code", "Menlo", "Monaco", monospace;
