@@ -42,6 +42,9 @@ struct DetailView: View {
             VStack(spacing: 0) {
                 headerBar(url: url)
                 Divider()
+                if mode != .edit {
+                    progressBar
+                }
                 contentArea(url: url)
                 Divider()
                 statusBar
@@ -64,9 +67,11 @@ struct DetailView: View {
                     Button("") { findVisible = true; findFocused = true }
                         .keyboardShortcut("f", modifiers: .command)
                 }
-                // ⌘+ / ⌘- / ⌘0 缩放
+                // ⌘+ / ⌘- / ⌘0 缩放(⌘= 与 ⇧⌘= 两种按法都支持)
                 Button("") { zoomLevel = min(2.0, zoomLevel + 0.1) }
                     .keyboardShortcut("=", modifiers: .command)
+                Button("") { zoomLevel = min(2.0, zoomLevel + 0.1) }
+                    .keyboardShortcut("+", modifiers: .command)
                 Button("") { zoomLevel = max(0.5, zoomLevel - 0.1) }
                     .keyboardShortcut("-", modifiers: .command)
                 Button("") { zoomLevel = 1.0 }
@@ -114,6 +119,23 @@ struct DetailView: View {
         .padding(.vertical, 6)
     }
 
+    // MARK: 阅读进度条(顶栏下方 2pt)
+
+    private var progressBar: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .leading) {
+                Rectangle()
+                    .fill(Color.primary.opacity(0.06))
+                Rectangle()
+                    .fill(Color.accentColor.opacity(0.85))
+                    .frame(width: geo.size.width * CGFloat(readProgress) / 100)
+                    .animation(.linear(duration: 0.1), value: readProgress)
+            }
+        }
+        .frame(height: 2)
+        .accessibilityLabel("阅读进度 \(readProgress)%")
+    }
+
     // MARK: 内容区(三模式)
 
     @ViewBuilder
@@ -147,6 +169,7 @@ struct DetailView: View {
             MarkdownEditorView(text: $editorDoc.text, box: editorBox,
                                typewriterMode: typewriterMode,
                                highlightCurrentLine: highlightCurrentLine,
+                               fontScale: zoomLevel,
                                imageDirectory: url.deletingLastPathComponent())
                 .onChange(of: editorDoc.text) { newText in
                     // 实时预览防抖 0.35s

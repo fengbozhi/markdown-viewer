@@ -16,7 +16,7 @@ swiftc -O -o /tmp/mdv_editor_tests tests/main.swift \
 回车续行(有序自增/空标记结束)、自动配对、语法高亮范围、表格插入、
 任务复选框翻转、模糊匹配打分、文档统计。
 
-## 渲染管线端到端测试(29 断言,需 Node + jsdom)
+## 渲染管线端到端测试(42 断言,需 Node + jsdom)
 
 ```bash
 # 1. 用 harness 生成真实 HTML(顶层表达式需以 main.swift 命名编译)

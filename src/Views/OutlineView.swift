@@ -35,9 +35,9 @@ struct OutlineView: View {
                     List(headings) { heading in
                         Text(heading.text)
                             .font(.system(size: heading.level <= 2 ? 12 : 11,
-                                          weight: heading.level <= 2 ? .medium : .regular))
+                                          weight: heading.id == activeHeading ? .semibold
+                                              : (heading.level <= 2 ? .medium : .regular)))
                             .foregroundColor(heading.id == activeHeading ? .accentColor : .primary)
-                            .fontWeight(heading.id == activeHeading ? .semibold : (heading.level <= 2 ? .medium : .regular))
                             .lineLimit(1)
                             .help(heading.text)
                             .padding(.leading, CGFloat(heading.level - 1) * 12)

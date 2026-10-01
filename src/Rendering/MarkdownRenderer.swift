@@ -114,6 +114,21 @@ enum MarkdownRenderer {
                 return ns.substring(with: m.range)
             }
         }
+        // 处理内联 HTML srcset="..."(<picture><source> 响应式图片,逐个候选地址转换)
+        if let regex = try? NSRegularExpression(pattern: "(\\bsrcset\\s*=\\s*[\"'])([^\"']+)([\"'])") {
+            result = replacing(regex, in: result) { m, ns in
+                let candidates = ns.substring(with: m.range(at: 2))
+                let converted = candidates.components(separatedBy: ",").map { cand -> String in
+                    // 每项形如 " url 2x" 或 " url 100w",只转换地址部分
+                    var parts = cand.trimmingCharacters(in: .whitespaces)
+                        .components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                    guard let first = parts.first, let abs = convert(first) else { return cand }
+                    parts[0] = abs
+                    return " " + parts.joined(separator: " ")
+                }.joined(separator: ",")
+                return ns.substring(with: m.range(at: 1)) + converted + ns.substring(with: m.range(at: 3))
+            }
+        }
         return result
     }
 
@@ -197,6 +212,9 @@ enum MarkdownRenderer {
         \(hljsCSS)
         \(katexCSS)
         html, body { margin: 0; padding: 0; background: \(bodyBg); }
+        /* 锚点跳转平滑滚动(TOC/脚注/大纲);尊重系统减弱动态效果设置 */
+        html { scroll-behavior: smooth; }
+        @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
         .markdown-body {
           box-sizing: border-box;
           min-width: 200px;
@@ -258,8 +276,11 @@ enum MarkdownRenderer {
           font-family: -apple-system, "PingFang SC", sans-serif;
         }
         .markdown-body pre .code-copy-btn:hover { color: \(copyBtnHover); background: rgba(255,255,255,0.08); }
-        .markdown-body pre code.hljs {
+        /* 代码块基础样式不依赖 .hljs 类:hljs 不认识的语言(如 cmd/bat/powershell)
+           高亮失败时也能保持浅底深色块上的可读性(原子 one-dark 基础色) */
+        .markdown-body pre code {
           display: block;
+          color: #abb2bf;
           background: \(carbonBg) !important;
           padding: 12px 16px 16px 0;
           margin: 0;
@@ -416,6 +437,30 @@ enum MarkdownRenderer {
           font-family: "SF Mono", "Menlo", "Monaco", monospace;
           font-size: 0.88em;
         }
+        /* 宽表格:内容超出时横向滚动,不撑破版面 */
+        .markdown-body table { display: block; overflow-x: auto; }
+        /* 标题 hover 锚点(GitHub 风格 ¶,点击复制章节链接);内容为 CSS 生成,不污染 textContent */
+        .mdv-anchor {
+          float: left;
+          margin-left: -1.1em;
+          width: 1em;
+          opacity: 0;
+          text-decoration: none;
+          color: var(--color-fg-muted, #888);
+          transition: opacity 0.15s ease;
+        }
+        .mdv-anchor::before { content: "¶"; }
+        h1:hover .mdv-anchor, h2:hover .mdv-anchor, h3:hover .mdv-anchor,
+        h4:hover .mdv-anchor, h5:hover .mdv-anchor, h6:hover .mdv-anchor { opacity: 0.65; }
+        .mdv-anchor:hover { opacity: 1 !important; }
+        /* 深色代码块内选中文本:默认选中色对比太差 */
+        .markdown-body pre ::selection { background: rgba(255,255,255,0.22); }
+        /* 打印/导出 PDF:避免代码块/表格/Callout 被从中间截断 */
+        @media print {
+          .markdown-body { max-width: none; padding: 0 20px; }
+          pre, blockquote, table, .mdv-callout, .mdv-frontmatter, .mermaid-chart { break-inside: avoid; }
+          h1, h2, h3, h4, h5, h6 { break-after: avoid; }
+        }
         </style>
         </head>
         <body>
@@ -480,11 +525,18 @@ enum MarkdownRenderer {
           // 12) Front Matter 属性面板(置于文档顶部)
           renderFrontMatter(contentEl, fm.data);
           // 13) 代码高亮(跳过 mermaid)
+          // 注意:hljs 对未注册语言(如 cmd/bat/powershell)会静默返回而不加 .hljs 类,
+          // 必须先检测语言注册情况,否则深色代码块上文字继承正文色,浅色模式下黑对黑不可读
           if (window.hljs) {
             hljs.configure({ ignoreUnescapedHTML: true });
             document.querySelectorAll("pre code").forEach(function (el) {
               if (el.className.indexOf("language-mermaid") === -1) {
-                try { hljs.highlightElement(el); } catch (e) {}
+                var lang = (el.className.match(/language-(\\S+)/) || [])[1];
+                if (lang && !hljs.getLanguage(lang)) {
+                  el.classList.add("hljs");   // 不支持的语言:仅补基础可读样式,不强行高亮
+                } else {
+                  try { hljs.highlightElement(el); } catch (e) { el.classList.add("hljs"); }
+                }
               }
             });
           }
@@ -619,10 +671,16 @@ enum MarkdownRenderer {
           });
         }
 
-        // ---- 标题锚点 id(与 Swift 端大纲提取顺序一致) ----
+        // ---- 标题锚点 id(与 Swift 端大纲提取顺序一致)+ hover 锚点链接 ----
         function assignHeadingIds() {
           document.querySelectorAll(HEADING_SELECTOR).forEach(function (h, i) {
             h.id = "mdv-h-" + i;
+            var a = document.createElement("a");
+            a.className = "mdv-anchor";
+            a.href = "#" + h.id;
+            a.setAttribute("aria-hidden", "true");
+            // 文本由 CSS ::before 生成,保证 h.textContent 不受污染(TOC/搜索依赖)
+            h.insertBefore(a, h.firstChild);
           });
         }
 
@@ -928,19 +986,27 @@ enum MarkdownRenderer {
 
         // ---- GitHub/Obsidian 风格 Callout(> [!TYPE]) ----
         // 注意:用函数包裹数据表,利用函数声明提升,保证 try 块中可调用(var 赋值不提升)
-        function calloutDefs() { return {
-          note: ["#0969da", "ℹ️", "Note"], info: ["#0969da", "ℹ️", "Info"], todo: ["#0969da", "☑️", "Todo"],
-          tip: ["#1a7f37", "💡", "Tip"], success: ["#1a7f37", "✅", "Success"],
-          check: ["#1a7f37", "✅", "Success"], done: ["#1a7f37", "✅", "Success"],
-          important: ["#8250df", "❗", "Important"], example: ["#8250df", "📝", "Example"],
-          warning: ["#9a6700", "⚠️", "Warning"], question: ["#9a6700", "❓", "Question"],
-          help: ["#9a6700", "❓", "Question"], faq: ["#9a6700", "❓", "Question"],
-          caution: ["#cf222e", "🔥", "Caution"], danger: ["#cf222e", "🔥", "Danger"],
-          error: ["#cf222e", "🔥", "Error"], failure: ["#cf222e", "❌", "Failure"],
-          fail: ["#cf222e", "❌", "Failure"], missing: ["#cf222e", "❌", "Missing"], bug: ["#cf222e", "🐛", "Bug"],
-          quote: ["#57606a", "💬", "Quote"], cite: ["#57606a", "💬", "Quote"],
-          abstract: ["#0e7490", "📄", "Abstract"], summary: ["#0e7490", "📄", "Abstract"]
-        }; }
+        // ---- GitHub/Obsidian 风格 Callout(> [!TYPE]);配色随明暗主题切换,保证深色模式对比度 ----
+        function calloutDefs() {
+          var c = function (light, dark) { return MDV_DARK ? dark : light; };
+          var blue = c("#0969da", "#4493f8"), green = c("#1a7f37", "#3fb950"),
+              purple = c("#8250df", "#a371f7"), amber = c("#9a6700", "#d29922"),
+              red = c("#cf222e", "#f85149"), gray = c("#57606a", "#9198a1"),
+              teal = c("#0e7490", "#39c5cf");
+          return {
+            note: [blue, "ℹ️", "Note"], info: [blue, "ℹ️", "Info"], todo: [blue, "☑️", "Todo"],
+            tip: [green, "💡", "Tip"], success: [green, "✅", "Success"],
+            check: [green, "✅", "Success"], done: [green, "✅", "Success"],
+            important: [purple, "❗", "Important"], example: [purple, "📝", "Example"],
+            warning: [amber, "⚠️", "Warning"], question: [amber, "❓", "Question"],
+            help: [amber, "❓", "Question"], faq: [amber, "❓", "Question"],
+            caution: [red, "🔥", "Caution"], danger: [red, "🔥", "Danger"],
+            error: [red, "🔥", "Error"], failure: [red, "❌", "Failure"],
+            fail: [red, "❌", "Failure"], missing: [red, "❌", "Missing"], bug: [red, "🐛", "Bug"],
+            quote: [gray, "💬", "Quote"], cite: [gray, "💬", "Quote"],
+            abstract: [teal, "📄", "Abstract"], summary: [teal, "📄", "Abstract"]
+          };
+        }
         function renderCallouts(root) {
           var CALLOUT_DEFS = calloutDefs();
           root.querySelectorAll("blockquote").forEach(function (bq) {

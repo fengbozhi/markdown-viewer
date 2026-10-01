@@ -44,6 +44,11 @@ $$
 let a = "$x$ 不应渲染 :smile: 不转换"
 print(a)
 ```
+
+```cmd
+pip install modelscope
+modelscope download --model BAAI/bge-reranker-large
+```
 """
 let html = MarkdownRenderer.buildHTML(markdown: md, dark: false)
 try! html.write(toFile: "/tmp/mdv_test.html", atomically: true, encoding: .utf8)

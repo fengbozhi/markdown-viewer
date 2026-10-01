@@ -62,6 +62,8 @@ struct MarkdownEditorView: NSViewRepresentable {
     var typewriterMode: Bool = false
     /// 当前行高亮(VS Code 风格)
     var highlightCurrentLine: Bool = true
+    /// 字号缩放(跟随全局 ⌘+/⌘- 缩放,1.0 为基准 14pt)
+    var fontScale: Double = 1.0
     /// 文档所在目录(图片粘贴保存位置)
     var imageDirectory: URL?
     /// 文本变化回调(用于脏标记/实时预览防抖等)
@@ -192,11 +194,17 @@ struct MarkdownEditorView: NSViewRepresentable {
 
         // MARK: 语法高亮
 
+        /// 上次应用的缩放系数(变化时重新高亮)
+        var lastFontScale: Double = 1.0
+
         func applyHighlight() {
             guard let tv = textView, let storage = tv.textStorage else { return }
             let text = tv.string
             let ns = text as NSString
             guard ns.length > 0 else { return }
+            let scale = parent.fontScale
+            lastFontScale = scale
+            let baseSize = 14 * scale
 
             // 超出上限只高亮可视区域,避免大文件卡顿
             let targetRange: NSRange
@@ -216,7 +224,7 @@ struct MarkdownEditorView: NSViewRepresentable {
 
             storage.beginEditing()
             // 基础样式
-            let baseFont = NSFont.monospacedSystemFont(ofSize: 14, weight: .regular)
+            let baseFont = NSFont.monospacedSystemFont(ofSize: baseSize, weight: .regular)
             storage.setAttributes([.font: baseFont, .foregroundColor: NSColor.labelColor], range: paraRange)
             // 语义 token 样式
             for (range, token) in tokens {
@@ -224,15 +232,15 @@ struct MarkdownEditorView: NSViewRepresentable {
                 guard NSMaxRange(absRange) <= ns.length else { continue }
                 switch token {
                 case .heading(let level):
-                    let size: CGFloat = level == 1 ? 22 : level == 2 ? 18 : level == 3 ? 16 : 14
+                    let size: CGFloat = level == 1 ? 22 * scale : level == 2 ? 18 * scale : level == 3 ? 16 * scale : baseSize
                     storage.addAttributes([
                         .font: NSFont.monospacedSystemFont(ofSize: size, weight: .bold),
                         .foregroundColor: NSColor.systemBlue,
                     ], range: absRange)
                 case .bold:
-                    storage.addAttribute(.font, value: NSFont.monospacedSystemFont(ofSize: 14, weight: .bold), range: absRange)
+                    storage.addAttribute(.font, value: NSFont.monospacedSystemFont(ofSize: baseSize, weight: .bold), range: absRange)
                 case .italic:
-                    storage.addAttribute(.font, value: NSFont.monospacedSystemFont(ofSize: 14, weight: .regular).italic(), range: absRange)
+                    storage.addAttribute(.font, value: NSFont.monospacedSystemFont(ofSize: baseSize, weight: .regular).italic(), range: absRange)
                 case .strikethrough:
                     storage.addAttributes([
                         .strikethroughStyle: NSUnderlineStyle.single.rawValue,
@@ -318,6 +326,10 @@ struct MarkdownEditorView: NSViewRepresentable {
             textView.string = text
             let maxLoc = (text as NSString).length
             textView.setSelectedRange(NSRange(location: min(selected.location, maxLoc), length: 0))
+            context.coordinator.applyHighlight()
+        }
+        // 缩放系数变化(⌘+/⌘-/⌘0)→ 重排字号
+        if context.coordinator.lastFontScale != fontScale {
             context.coordinator.applyHighlight()
         }
     }

@@ -2,7 +2,23 @@
 
 一款原生 macOS Markdown **阅读 + 编辑**工具，致力于成为最好用的 Markdown 文档工具。基于 Swift + SwiftUI + WebKit + NSTextView 构建，无任何第三方运行时依赖，开箱即用，**完全离线**。
 
-![macOS](https://img.shields.io/badge/macOS-13%2B-blue) ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange) ![License](https://img.shields.io/badge/license-MIT-green) ![Tests](https://img.shields.io/badge/tests-67%2B29%20passed-brightgreen)
+![macOS](https://img.shields.io/badge/macOS-13%2B-blue) ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange) ![License](https://img.shields.io/badge/license-MIT-green) ![Tests](https://img.shields.io/badge/tests-67%2B42%20passed-brightgreen)
+
+## 📸 应用截图
+
+渲染效果实拍（演示文档见 [docs/demo/showcase.md](docs/demo/showcase.md)，截图由 App 真实渲染管线生成）:
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/preview-dark.png">
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/preview-light.png">
+  <img alt="MarkdownViewer 渲染效果展示:Front Matter 属性面板、TOC 目录、Callout 提示框、KaTeX 数学公式、代码高亮、Mermaid 图表、任务列表、表格与扩展语法" src="docs/images/preview-light.png" width="720">
+</picture>
+
+| 浅色模式 | 深色模式 |
+|:-------:|:-------:|
+| ![浅色模式渲染效果](docs/images/preview-light.png) | ![深色模式渲染效果](docs/images/preview-dark.png) |
+
+图中演示能力：YAML Front Matter 属性面板 · `[TOC]` 目录 · Callout 提示框 · KaTeX 数学公式 · Carbon 风格代码块（复制按钮/语言标签/行号）· Mermaid 流程图 · 可点击任务列表 · 表格 · `==高亮==`/`~下标~`/`^上标^`/脚注
 
 ## ✨ 功能特性
 
@@ -31,7 +47,10 @@
 - **YAML Front Matter 属性面板**（Obsidian Properties 风格）：文档头部 `---` 元数据渲染为属性表格，支持数组展开
 - **任务列表可点击**（Typora 风格）：渲染区直接点击复选框，**自动回写源文件**（干净文档直接落盘，有未保存编辑时只改缓冲区）
 - **扩展语法**：`==高亮==`、`~下标~`、`^上标^`、`[^脚注]`、`[TOC]` 目录（可点击跳转）
-- **深色模式**：一键切换明暗主题，编辑器与渲染区同步适配
+- **平滑滚动**：锚点跳转（TOC/脚注/大纲）平滑过渡，尊重系统"减弱动态效果"设置
+- **标题锚点**：hover 标题显示 GitHub 风格 `¶` 链接，点击即可复制章节定位
+- **宽表格自适应**：内容超宽时表格内部横向滚动，不撑破版面
+- **深色模式**：一键切换明暗主题，编辑器与渲染区同步适配，加载无白闪
 - **图片高清显示**：双击图片弹窗全屏查看，支持缩放与拖动
 
 ### 效率功能
@@ -40,10 +59,10 @@
 - **文件自动重载**：外部编辑器保存后自动刷新，保持滚动位置；目录增删文件自动刷新列表
 - **代码块增强**：Carbon 风格窗口 + 语言标签 + 一键复制按钮 + 行号
 - **文档内查找**（⌘F）：全部命中高亮，回车逐项跳转，显示"第 n / 共 m 处"
-- **底部状态栏**：字数 / 字符 / 行数统计 + 预计阅读时长 + 阅读进度百分比
-- **字体缩放**：⌘+ / ⌘- / ⌘0，50% ~ 200%
+- **底部状态栏**：字数 / 字符 / 行数统计 + 预计阅读时长 + 阅读进度百分比，顶栏下方附 2pt 阅读进度条
+- **字体缩放**：⌘+ / ⌘- / ⌘0（编辑器与渲染区同步生效），50% ~ 200%
 - **导出独立 HTML**（⌘⇧E）：图片与字体内嵌 base64，单文件可直接分发
-- **导出 PDF**（⌘⇧P）：整页捕获渲染结果，保留全部排版样式
+- **导出 PDF**（⌘⇧P）：整页捕获渲染结果，保留全部排版样式，代码块/表格自动避免跨页截断
 - **在 Finder 中显示**（⌘⇧R）/ **用默认编辑器打开**（⌘⇧O）/ **打印**
 - **会话记忆**：自动恢复上次打开的文件夹、选中状态、面板开关、主题、缩放与视图模式
 
@@ -106,7 +125,7 @@ markdown-viewer/
 ├── tests/
 │   ├── main.swift                       # 编辑器单元测试(67 用例,构建门禁)
 │   ├── render_harness.swift             # 渲染 HTML 生成器
-│   ├── render_e2e.js                    # 渲染管线端到端测试(29 断言,jsdom)
+│   ├── render_e2e.js                    # 渲染管线端到端测试(42 断言,jsdom)
 │   └── README.md                        # 测试运行说明
 ├── build.sh                             # 一键构建(测试 → 编译 → 打包 → 签名)
 └── README.md
@@ -115,7 +134,7 @@ markdown-viewer/
 ## 🔧 质量保障
 
 - **单元测试**：编辑器格式化命令、表格插入、任务复选框翻转、模糊匹配、文档统计、列表续行、自动配对、语法高亮均为纯函数，67 个用例覆盖正常/边界/幂等路径，作为 `build.sh` 构建门禁
-- **端到端测试**：渲染管线（marked/KaTeX/Mermaid/TOC/脚注/Callout/Emoji/Front Matter 等 16 步）在 jsdom 中执行真实产物并做 29 项断言
+- **端到端测试**：渲染管线（marked/KaTeX/Mermaid/TOC/脚注/Callout/Emoji/Front Matter 等 16 步）在 jsdom 中执行真实产物并做 42 项断言（含样式、交互与可读性回归）
 - **防御式设计**：脏标记是计算属性（`text != savedText`，不可能状态不一致）；原子保存；外部冲突永不静默覆盖；超过 30 万字符的文档编辑器只高亮可视区域；渲染层数据表用函数声明提升包裹，避免执行时序陷阱
 
 ## 🗺️ 功能路线图

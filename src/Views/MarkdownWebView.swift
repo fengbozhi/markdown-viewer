@@ -80,11 +80,15 @@ struct MarkdownWebView: NSViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             guard let p = pendingRestoreProgress, p > 0 else { return }
             pendingRestoreProgress = nil
+            // 恢复滚动必须瞬间完成:临时关闭 CSS scroll-behavior: smooth,否则会看到滚动动画
             let js = """
             (function () {
               var d = document.documentElement;
+              var prev = d.style.scrollBehavior;
+              d.style.scrollBehavior = "auto";
               var max = d.scrollHeight - d.clientHeight;
               if (max > 0) window.scrollTo(0, max * \(p) / 100);
+              d.style.scrollBehavior = prev;
             })();
             """
             // 等渲染管线(marked/mermaid 异步)完成后再恢复
@@ -120,6 +124,8 @@ struct MarkdownWebView: NSViewRepresentable {
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.autoresizingMask = [.width, .height]
         webView.pageZoom = CGFloat(zoomLevel)
+        // 加载完成前的底色与正文一致,避免深色模式下白闪
+        webView.underPageBackgroundColor = Self.pageBackgroundColor(dark: dark)
         webView.navigationDelegate = context.coordinator
         context.coordinator.webView = webView
         box.webView = webView
@@ -159,7 +165,16 @@ struct MarkdownWebView: NSViewRepresentable {
         if webView.pageZoom != CGFloat(zoomLevel) {
             webView.pageZoom = CGFloat(zoomLevel)
         }
+        let bg = Self.pageBackgroundColor(dark: dark)
+        if webView.underPageBackgroundColor != bg {
+            webView.underPageBackgroundColor = bg
+        }
         handleScrollTarget(webView, context: context)
+    }
+
+    /// 与渲染 HTML 的 body 背景一致的底色
+    private static func pageBackgroundColor(dark: Bool) -> NSColor {
+        dark ? NSColor(red: 0x0d / 255, green: 0x11 / 255, blue: 0x17 / 255, alpha: 1) : .white
     }
 
     private func handleScrollTarget(_ webView: WKWebView, context: Context) {

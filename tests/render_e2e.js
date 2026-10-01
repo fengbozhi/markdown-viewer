@@ -19,6 +19,7 @@ setTimeout(() => {
   // 注意:不能用 body.textContent(script 标签源码也会被计入),只取渲染容器
   const bodyText = doc.getElementById("content").textContent;
   const codeText = doc.querySelector("pre code")?.textContent || "";
+  const styleText = doc.querySelector("style")?.textContent || "";
   const checks = [
     ["KaTeX 行内公式渲染", doc.querySelectorAll(".katex").length >= 2],
     ["KaTeX 块级公式", doc.querySelectorAll(".katex-display").length >= 1],
@@ -49,6 +50,21 @@ setTimeout(() => {
     ["任务复选框渲染", doc.querySelectorAll('input[type="checkbox"]').length === 2],
     ["任务复选框可点击(disabled 移除)", [...doc.querySelectorAll('input[type="checkbox"]')].every(cb => !cb.disabled)],
     ["已完成任务勾选状态", [...doc.querySelectorAll('input[type="checkbox"]')].some(cb => cb.checked)],
+    // 样式/交互优化(标题锚点 / 平滑滚动 / 打印分页 / 宽表格)
+    ["标题 hover 锚点存在", !!doc.querySelector("h1 .mdv-anchor")],
+    ["锚点链接指向标题 id", doc.querySelector("h1 .mdv-anchor")?.getAttribute("href") === "#mdv-h-0"],
+    ["锚点不污染标题文本(¶ 由 CSS 生成)", !doc.querySelector("h1")?.textContent.includes("¶")],
+    ["TOC 文本不含锚点符号", ![...doc.querySelectorAll(".mdv-toc a")].some(a => a.textContent.includes("¶"))],
+    ["CSS:平滑滚动", styleText.includes("scroll-behavior: smooth")],
+    ["CSS:减弱动态效果降级", styleText.includes("prefers-reduced-motion")],
+    ["CSS:打印分页保护", styleText.includes("@media print") && styleText.includes("break-inside: avoid")],
+    ["CSS:宽表格横向滚动", styleText.includes("overflow-x: auto")],
+    ["CSS:代码块选中色", styleText.includes("::selection")],
+    // 可读性回归:未知语言代码块(cmd)不应黑对黑
+    ["未知语言 cmd 代码块存在", !!doc.querySelector("pre code.language-cmd")],
+    ["未知语言高亮失败时补 .hljs 类", doc.querySelector("pre code.language-cmd")?.classList.contains("hljs")],
+    ["CSS:代码块基础色不依赖 .hljs", /\.markdown-body pre code\s*\{[^}]*color:\s*#abb2bf/.test(styleText)],
+    ["CSS:Callout 深色模式配色", html.includes("#4493f8") && html.includes("MDV_DARK ? dark : light")],
   ];
   let fail = 0;
   for (const [name, ok] of checks) { console.log((ok ? "PASS" : "FAIL") + "  " + name); if (!ok) fail++; }

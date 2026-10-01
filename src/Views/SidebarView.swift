@@ -72,16 +72,31 @@ struct SidebarView: View {
             .padding(.top, 10)
             .padding(.bottom, 4)
 
-            List {
-                ForEach(store.filteredItems) { item in
-                    SidebarRowView(item: item, selected: item.id == store.selectedPath)
-                        .onTapGesture { store.selectedPath = item.id }
-                        .listRowBackground(Color.clear)
-                        .listRowSeparator(.hidden)
-                        .listRowInsets(EdgeInsets())
+            if store.filteredItems.isEmpty {
+                // 空态:区分「文件夹无文档」与「搜索无结果」
+                VStack(spacing: 6) {
+                    Image(systemName: store.query.isEmpty ? "doc.text.magnifyingglass" : "magnifyingglass")
+                        .font(.title3)
+                        .foregroundColor(Color(nsColor: .tertiaryLabelColor))
+                    Text(store.query.isEmpty ? "文件夹中没有 Markdown 文档" : "没有匹配「\(store.query)」的文档")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 16)
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                List {
+                    ForEach(store.filteredItems) { item in
+                        SidebarRowView(item: item, selected: item.id == store.selectedPath)
+                            .onTapGesture { store.selectedPath = item.id }
+                            .listRowBackground(Color.clear)
+                            .listRowSeparator(.hidden)
+                            .listRowInsets(EdgeInsets())
+                    }
+                }
+                .listStyle(.plain)
             }
-            .listStyle(.plain)
 
             Divider()
             HStack {
@@ -93,6 +108,12 @@ struct SidebarView: View {
                     .foregroundColor(.secondary)
                     .lineLimit(1)
                     .truncationMode(.head)
+                if !store.items.isEmpty {
+                    Text("\(store.filteredItems.count) 篇")
+                        .font(.caption2)
+                        .foregroundColor(Color(nsColor: .tertiaryLabelColor))
+                        .monospacedDigit()
+                }
                 Spacer()
                 Button(action: { store.chooseFolder() }) {
                     Image(systemName: "folder.badge.plus")
