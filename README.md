@@ -2,7 +2,7 @@
 
 一款原生 macOS Markdown **阅读 + 编辑**工具，致力于成为最好用的 Markdown 文档工具。基于 Swift + SwiftUI + WebKit + NSTextView 构建，无任何第三方运行时依赖，开箱即用，**完全离线**。
 
-![macOS](https://img.shields.io/badge/macOS-13%2B-blue) ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange) ![License](https://img.shields.io/badge/license-MIT-green) ![Tests](https://img.shields.io/badge/tests-67%2B42%20passed-brightgreen)
+![macOS](https://img.shields.io/badge/macOS-13%2B-blue) ![Swift](https://img.shields.io/badge/Swift-5.9%2B-orange) ![License](https://img.shields.io/badge/license-MIT-green) ![Tests](https://img.shields.io/badge/tests-67%2B42%20passed-brightgreen) [![Homebrew](https://img.shields.io/badge/Homebrew-brew%20install-orange)](https://github.com/fengbozhi/homebrew-tap)
 
 ## 📸 应用截图
 
@@ -68,13 +68,28 @@
 
 ## 🚀 快速开始
 
-### 方式一：直接下载使用
+### 方式一：Homebrew 安装（推荐）
 
-从 [Releases](../../releases) 下载 `Markdown Viewer.app`，拖入「应用程序」文件夹即可。
+```bash
+brew install --cask fengbozhi/tap/markdownviewer
+```
+
+升级与卸载：
+
+```bash
+brew upgrade --cask markdownviewer      # 升级到新版本
+brew uninstall --cask markdownviewer    # 卸载
+```
+
+> Cask 维护在 [fengbozhi/homebrew-tap](https://github.com/fengbozhi/homebrew-tap),随每次 Release 同步更新。
+
+### 方式二：直接下载
+
+从 [Releases](../../releases) 下载 `MarkdownViewer-x.y.dmg`，打开后把 **Markdown Viewer** 拖入「应用程序」文件夹即可。
 
 > 首次打开若提示"无法验证开发者"：右键点击应用 →「打开」，或在「系统设置 → 隐私与安全性」中允许。
 
-### 方式二：从源码构建
+### 方式三：从源码构建
 
 ```bash
 git clone https://github.com/fengbozhi/markdown-viewer.git
