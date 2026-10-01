@@ -16,11 +16,54 @@ final class EditorBox: ObservableObject {
     }
 }
 
-// MARK: - Markdown 编辑器(NSTextView 封装:高亮 / 自动配对 / 列表续行)
+// MARK: - 自定义文本视图(拦截粘贴:图片自动存 assets/ 并插入链接)
+
+final class MDVTextView: NSTextView {
+    /// 文档所在目录(粘贴图片时计算 assets/ 路径)
+    var imageDirectory: URL?
+
+    override func paste(_ sender: Any?) {
+        let pb = NSPasteboard.general
+        if let dir = imageDirectory {
+            // 1) 剪贴板中的位图数据(截图/复制的图像)
+            let pngData = pb.data(forType: .png)
+                ?? pb.data(forType: .tiff).flatMap {
+                    NSBitmapImageRep(data: $0)?.representation(using: .png, properties: [:])
+                }
+            if let data = pngData,
+               let md = ImagePasteService.saveImage(data: data, ext: "png", docDir: dir) {
+                insertText(md, replacementRange: selectedRange())
+                return
+            }
+            // 2) 剪贴板中的图片文件(Finder 复制的图片)
+            let options: [NSPasteboard.ReadingOptionKey: Any] = [.urlReadingFileURLsOnly: true]
+            if let urls = pb.readObjects(forClasses: [NSURL.self], options: options) as? [URL] {
+                let imageExts: Set<String> = ["png", "jpg", "jpeg", "gif", "webp", "bmp", "svg", "heic"]
+                let images = urls.filter { imageExts.contains($0.pathExtension.lowercased()) }
+                if !images.isEmpty {
+                    let links = images.compactMap { ImagePasteService.link(for: $0, docDir: dir) }
+                    if !links.isEmpty {
+                        insertText(links.joined(separator: "\n"), replacementRange: selectedRange())
+                        return
+                    }
+                }
+            }
+        }
+        super.paste(sender)
+    }
+}
+
+// MARK: - Markdown 编辑器(NSTextView 封装:高亮 / 自动配对 / 列表续行 / 打字机模式)
 
 struct MarkdownEditorView: NSViewRepresentable {
     @Binding var text: String
     let box: EditorBox
+    /// 打字机模式(iA Writer):光标行始终垂直居中
+    var typewriterMode: Bool = false
+    /// 当前行高亮(VS Code 风格)
+    var highlightCurrentLine: Bool = true
+    /// 文档所在目录(图片粘贴保存位置)
+    var imageDirectory: URL?
     /// 文本变化回调(用于脏标记/实时预览防抖等)
     var onTextChange: (() -> Void)?
 
@@ -101,6 +144,50 @@ struct MarkdownEditorView: NSViewRepresentable {
             isProgrammaticEdit = true
             edit(tv)
             isProgrammaticEdit = false
+        }
+
+        // MARK: 光标事件:当前行高亮 + 打字机模式
+
+        func textViewDidChangeSelection(_ notification: Notification) {
+            updateCurrentLineHighlight()
+            guard parent.typewriterMode,
+                  let tv = textView,
+                  tv.selectedRange().length == 0 else { return }
+            // 鼠标点击/拖动引起的光标移动不做居中,避免视图跳动
+            if let event = NSApp.currentEvent,
+               [.leftMouseDown, .leftMouseUp, .leftMouseDragged,
+                .rightMouseDown, .rightMouseUp, .scrollWheel].contains(event.type) { return }
+            centerCaret(in: tv)
+        }
+
+        /// 打字机模式:把光标所在行滚动到可视区域垂直中心
+        private func centerCaret(in tv: NSTextView) {
+            guard let layout = tv.layoutManager,
+                  let container = tv.textContainer,
+                  let scrollView = tv.enclosingScrollView else { return }
+            let sel = tv.selectedRange().location
+            guard sel <= (tv.string as NSString).length else { return }
+            let glyph = layout.glyphIndexForCharacter(at: sel)
+            var rect = layout.boundingRect(forGlyphRange: NSRange(location: glyph, length: 0),
+                                           in: container)
+            rect.origin.y += tv.textContainerInset.height
+            let visibleHeight = scrollView.contentSize.height
+            let targetY = max(0, rect.midY - visibleHeight / 2)
+            tv.scroll(NSPoint(x: 0, y: targetY))
+        }
+
+        /// 当前行高亮(临时属性,不与语法高亮冲突)
+        func updateCurrentLineHighlight() {
+            guard let tv = textView, let layout = tv.layoutManager else { return }
+            let ns = tv.string as NSString
+            layout.removeTemporaryAttribute(.backgroundColor,
+                                            forCharacterRange: NSRange(location: 0, length: ns.length))
+            guard parent.highlightCurrentLine else { return }
+            let caret = min(tv.selectedRange().location, ns.length)
+            let paraRange = ns.paragraphRange(for: NSRange(location: caret, length: 0))
+            layout.addTemporaryAttribute(.backgroundColor,
+                                         value: NSColor.labelColor.withAlphaComponent(0.05),
+                                         forCharacterRange: paraRange)
         }
 
         // MARK: 语法高亮
@@ -185,7 +272,8 @@ struct MarkdownEditorView: NSViewRepresentable {
         scrollView.autohidesScrollers = true
         scrollView.borderType = .noBorder
 
-        let textView = NSTextView()
+        let textView = MDVTextView()
+        textView.imageDirectory = imageDirectory
         textView.isRichText = false
         textView.allowsUndo = true
         textView.font = .monospacedSystemFont(ofSize: 14, weight: .regular)

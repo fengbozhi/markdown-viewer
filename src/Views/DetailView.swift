@@ -10,7 +10,8 @@ struct DetailView: View {
     @Binding var activeHeading: Int
     let mode: ViewMode
     let darkMode: Bool
-    let wordCount: Int
+    /// 文档统计(字数/字符/行)
+    let stats: DocStats
     /// 预计阅读时长(分钟,0 表示未知)
     let readingMinutes: Int
     /// 外部文件变更令牌(自动重载)
@@ -18,6 +19,10 @@ struct DetailView: View {
     let box: WebViewBox
     @ObservedObject var editorDoc: EditorDocument
     let editorBox: EditorBox
+    /// 打字机模式(光标行垂直居中)
+    let typewriterMode: Bool
+    /// 当前行高亮
+    let highlightCurrentLine: Bool
 
     @State private var findVisible = false
     @FocusState private var findFocused: Bool
@@ -117,10 +122,10 @@ struct DetailView: View {
         case .preview:
             webArea(url: url, source: nil)
         case .edit:
-            editorArea
+            editorArea(url: url)
         case .split:
             HSplitView {
-                editorArea.frame(minWidth: 280)
+                editorArea(url: url).frame(minWidth: 280)
                 webArea(url: url, source: previewSource).frame(minWidth: 280)
             }
         }
@@ -135,11 +140,14 @@ struct DetailView: View {
 
     // MARK: 编辑区(格式化工具栏 + 编辑器)
 
-    private var editorArea: some View {
+    private func editorArea(url: URL) -> some View {
         VStack(spacing: 0) {
             formatBar
             Divider()
-            MarkdownEditorView(text: $editorDoc.text, box: editorBox)
+            MarkdownEditorView(text: $editorDoc.text, box: editorBox,
+                               typewriterMode: typewriterMode,
+                               highlightCurrentLine: highlightCurrentLine,
+                               imageDirectory: url.deletingLastPathComponent())
                 .onChange(of: editorDoc.text) { newText in
                     // 实时预览防抖 0.35s
                     previewTask?.cancel()
@@ -160,6 +168,8 @@ struct DetailView: View {
                 .keyboardShortcut("k", modifiers: .command)
             Button("") { editorBox.apply(.strikethrough) }
                 .keyboardShortcut("x", modifiers: [.command, .shift])
+            Button("") { editorBox.apply(.table) }
+                .keyboardShortcut("t", modifiers: [.command, .option])
         }
     }
 
@@ -179,6 +189,8 @@ struct DetailView: View {
             formatButton("list.bullet", "无序列表") { editorBox.apply(.bulletList) }
             formatButton("list.number", "有序列表") { editorBox.apply(.orderedList) }
             formatButton("checklist", "任务列表") { editorBox.apply(.taskList) }
+            Divider().frame(height: 14).padding(.horizontal, 4)
+            formatButton("tablecells", "插入表格 (⌥⌘T)") { editorBox.apply(.table) }
             Spacer()
         }
         .padding(.horizontal, 10)
@@ -247,11 +259,11 @@ struct DetailView: View {
 
     private var statusBar: some View {
         HStack(spacing: 12) {
-            if wordCount > 0 {
-                Text("字数 \(wordCount)")
+            if stats.words > 0 {
+                Text("字数 \(stats.words) · 字符 \(stats.chars) · 行 \(stats.lines)")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                    .help("正文总字数(不含空白字符)")
+                    .help("字数不含空白字符 · 字符为总字符数")
             }
             if readingMinutes > 0 {
                 Text(readingMinutes < 1 ? "1 分钟内读完" : "约 \(readingMinutes) 分钟读完")

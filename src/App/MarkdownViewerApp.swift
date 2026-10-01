@@ -1,7 +1,8 @@
-// Markdown 阅读器 - macOS 两栏 Markdown 阅读器(参考 Typora)
-// 左栏:文件列表(文件名 + 文档标题,可收起)  中栏:大纲(可收起,滚动同步高亮)  右栏:完整渲染
-// 双击图片:弹窗全屏查看,支持捏合缩放与拖动
-// 功能亮点:KaTeX 数学公式 / Mermaid / [TOC] 目录 / 脚注 / 代码复制 / 文件变更自动重载 / 导出 HTML / 源码模式
+// Markdown 阅读器 - 原生 macOS Markdown 阅读 + 编辑工具
+// 三栏:文档列表(可收起) / 大纲(滚动同步高亮) / 正文(预览 ⌘1 · 分屏 ⌘2 · 编辑 ⌘3)
+// 阅读:KaTeX / Mermaid / Callout / Emoji 短代码 / Front Matter / [TOC] / 脚注 / 代码复制
+// 编辑:语法高亮 / 智能输入 / 图片粘贴 / 打字机模式 / 当前行高亮 / 三道数据安全防线
+// 效率:⌘P 快速打开 / 任务复选框点击回写 / 文件自动重载 / 导出 HTML / 导出 PDF
 
 import SwiftUI
 import AppKit

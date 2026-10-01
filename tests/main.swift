@@ -126,5 +126,51 @@ let nsSample = sample as NSString
 let allInBounds = tokens.allSatisfy { NSMaxRange($0.0) <= nsSample.length }
 check(allInBounds, "高亮:所有范围在文本内")
 
+// ---- 表格插入 ----
+r = EditorCommands.apply(.table, to: "", selection: sel(0, 0))
+check(r.replacement.hasPrefix("| 列1 | 列2 | 列3 |") && r.replacement.contains("| --- | --- | --- |"),
+      "表格:空文档插入模板")
+check(NSEqualRanges(r.selection, sel(2, 2)), "表格:空文档光标落在列1")
+
+r = EditorCommands.apply(.table, to: "abc", selection: sel(1, 0))
+check(r.range.location == 3 && r.range.length == 0, "表格:在当前行末尾插入")
+check(r.replacement.hasPrefix("\n\n| 列1") && r.replacement.hasSuffix("\n"), "表格:与上文空行分隔")
+check(NSEqualRanges(r.selection, sel(7, 2)), "表格:光标落在列1")
+
+// 多行文档:光标在第二行,表格插到第二行(含行尾换行)之后,即第三行开头
+r = EditorCommands.apply(.table, to: "line1\nline2\nline3", selection: sel(8, 0))
+check(r.range.location == 12, "表格:插入位置为当前行末尾")
+
+// ---- 任务复选框翻转 ----
+check(TaskToggle.flip(in: "- [ ] a", index: 0) == "- [x] a", "复选框:勾选")
+check(TaskToggle.flip(in: "- [x] a", index: 0) == "- [ ] a", "复选框:取消勾选")
+check(TaskToggle.flip(in: "- [X] a", index: 0) == "- [ ] a", "复选框:大写 X 取消")
+let tasks = "正文\n- [ ] 一\n- [x] 二\n  - [ ] 三\n普通 - [ ] 不在行首不算"
+check(TaskToggle.flip(in: tasks, index: 0) == "正文\n- [x] 一\n- [x] 二\n  - [ ] 三\n普通 - [ ] 不在行首不算",
+      "复选框:第 0 个")
+check(TaskToggle.flip(in: tasks, index: 1) == "正文\n- [ ] 一\n- [ ] 二\n  - [ ] 三\n普通 - [ ] 不在行首不算",
+      "复选框:第 1 个")
+check(TaskToggle.flip(in: tasks, index: 2) == "正文\n- [ ] 一\n- [x] 二\n  - [x] 三\n普通 - [ ] 不在行首不算",
+      "复选框:缩进任务也算")
+check(TaskToggle.flip(in: tasks, index: 3) == nil, "复选框:越界返回 nil")
+check(TaskToggle.flip(in: "没有任务", index: 0) == nil, "复选框:无任务返回 nil")
+check(TaskToggle.flip(in: tasks, index: -1) == nil, "复选框:负索引返回 nil")
+
+// ---- 模糊匹配(快速打开) ----
+check(FuzzyMatch.matches("MarkdownViewer", "mdv"), "模糊:子序列命中")
+check(FuzzyMatch.matches("README", "rm"), "模糊:大小写不敏感")
+check(!FuzzyMatch.matches("abc", "acb"), "模糊:乱序不命中")
+check(!FuzzyMatch.matches("ab", "abc"), "模糊:query 更长不命中")
+check(FuzzyMatch.score("markdown", "md") > FuzzyMatch.score("x-markdown", "md"),
+      "模糊:开头匹配得分更高")
+check(FuzzyMatch.score("abc", "") == 0, "模糊:空 query 得 0 分")
+
+// ---- 文档统计 ----
+let s1 = DocStats(text: "你好 world\n第二行")
+check(s1.chars == 12 && s1.words == 10 && s1.lines == 2, "统计:中英混合")
+check(DocStats(text: "") == DocStats(), "统计:空文档")
+check(DocStats(text: "a") == DocStats(words: 1, chars: 1, lines: 1), "统计:单字符")
+check(DocStats(text: "a\nb\n").lines == 3, "统计:末尾换行算一行")
+
 print(failures == 0 ? "\nALL EDITOR TESTS PASSED" : "\n\(failures) FAILURES")
 exit(failures == 0 ? 0 : 1)

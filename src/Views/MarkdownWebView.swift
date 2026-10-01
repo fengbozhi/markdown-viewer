@@ -5,6 +5,21 @@ import WebKit
 
 final class WebViewBox: ObservableObject {
     weak var webView: WKWebView?
+    /// 任务复选框点击回调(参数为复选框在文档中的序号)
+    var onTaskToggle: ((Int) -> Void)?
+}
+
+/// 任务列表复选框点击上报(渲染区点击 → 回写源文件)
+final class TaskToggleHandler: NSObject, WKScriptMessageHandler {
+    var onToggle: ((Int) -> Void)?
+
+    func userContentController(_ userContentController: WKUserContentController,
+                               didReceive message: WKScriptMessage) {
+        guard message.name == "taskToggle",
+              let body = message.body as? [String: Any],
+              let index = body["index"] as? Int else { return }
+        onToggle?(index)
+    }
 }
 
 final class ScrollProgressHandler: NSObject, WKScriptMessageHandler {
@@ -57,6 +72,7 @@ struct MarkdownWebView: NSViewRepresentable {
         let popupController = PopupImageWindowController()
         let scrollHandler = ScrollProgressHandler()
         let headingHandler = ActiveHeadingHandler()
+        let taskHandler = TaskToggleHandler()
         weak var webView: WKWebView?
         /// 自动重载前记录阅读进度,加载完成后恢复滚动位置
         var pendingRestoreProgress: Int?
@@ -90,11 +106,16 @@ struct MarkdownWebView: NSViewRepresentable {
                                          name: "scrollProgress")
         config.userContentController.add(context.coordinator.headingHandler,
                                          name: "activeHeading")
+        config.userContentController.add(context.coordinator.taskHandler,
+                                         name: "taskToggle")
         context.coordinator.scrollHandler.onProgress = { p in
             DispatchQueue.main.async { progress = p }
         }
         context.coordinator.headingHandler.onActiveHeading = { idx in
             DispatchQueue.main.async { activeHeading = idx }
+        }
+        context.coordinator.taskHandler.onToggle = { idx in
+            DispatchQueue.main.async { box.onTaskToggle?(idx) }
         }
         let webView = WKWebView(frame: .zero, configuration: config)
         webView.autoresizingMask = [.width, .height]

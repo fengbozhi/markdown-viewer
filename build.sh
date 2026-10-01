@@ -11,7 +11,9 @@ APP="Markdown Viewer.app"
 if [[ "$1" != "--skip-tests" ]]; then
   echo "==> 运行单元测试..."
   swiftc -O -o /tmp/mdv_editor_tests \
-    tests/main.swift src/Editing/EditorCommands.swift src/Editing/MarkdownHighlighter.swift \
+    tests/main.swift \
+    src/Editing/EditorCommands.swift src/Editing/MarkdownHighlighter.swift src/Editing/TaskToggle.swift \
+    src/Models/FuzzyMatch.swift src/Models/DocStats.swift \
     -framework Foundation
   /tmp/mdv_editor_tests > /tmp/mdv_tests.log 2>&1 || { cat /tmp/mdv_tests.log; echo "测试失败,构建中止"; exit 1; }
   grep -c "^PASS" /tmp/mdv_tests.log | xargs echo "   通过用例数:"

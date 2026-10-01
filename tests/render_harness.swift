@@ -1,6 +1,12 @@
 import Foundation
 
 let md = """
+---
+title: 测试文档
+tags: [markdown, 测试]
+draft: false
+---
+
 # 测试文档
 
 [TOC]
@@ -19,8 +25,23 @@ $$
 
 [^note1]: 这是第一条脚注。
 
+## Callout 提示框
+
+> [!NOTE]
+> 这是一个提示框内容。
+
+> [!WARNING]
+> 这是警告内容。
+
+## Emoji 与任务列表
+
+心情 :smile: 发射 :rocket: 爱心 :heart:
+
+- [ ] 未完成任务
+- [x] 已完成任务
+
 ```swift
-let a = "$x$ 不应渲染"
+let a = "$x$ 不应渲染 :smile: 不转换"
 print(a)
 ```
 """

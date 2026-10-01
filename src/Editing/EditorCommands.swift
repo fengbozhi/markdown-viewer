@@ -16,6 +16,7 @@ enum EditorCommand {
     case bold, italic, strikethrough, inlineCode, link
     case heading(Int)   // 1-6 设置标题级别,0 清除标题
     case quote, bulletList, orderedList, taskList
+    case table          // 在当前行后插入 3 列表格模板
 }
 
 enum EditorCommands {
@@ -34,7 +35,29 @@ enum EditorCommands {
         case .bulletList: return toggleLinePrefix(text: text, selection: selection, kind: .bullet)
         case .orderedList: return toggleLinePrefix(text: text, selection: selection, kind: .ordered)
         case .taskList: return toggleLinePrefix(text: text, selection: selection, kind: .task)
+        case .table: return insertTable(text: text, selection: selection)
         }
+    }
+
+    // MARK: 表格
+
+    /// 在当前行之后插入 3×2 表格模板,光标落在第一个表头单元格
+    static func insertTable(text: String, selection sel: NSRange) -> EditResult {
+        let ns = text as NSString
+        let caret = min(sel.location, ns.length)
+        let table = "| 列1 | 列2 | 列3 |\n| --- | --- | --- |\n|  |  |  |\n|  |  |  |"
+        if ns.length == 0 {
+            // 空文档:直接插入,表头 "列1" 位于偏移 2
+            return EditResult(range: NSRange(location: 0, length: 0),
+                              replacement: table + "\n",
+                              selection: NSRange(location: 2, length: 2))
+        }
+        let lineRange = ns.lineRange(for: NSRange(location: caret, length: 0))
+        let insertLoc = NSMaxRange(lineRange)
+        // 与上文用一个空行分隔;"\n\n| " 之后是 "列1"(偏移 4)
+        return EditResult(range: NSRange(location: insertLoc, length: 0),
+                          replacement: "\n\n" + table + "\n",
+                          selection: NSRange(location: insertLoc + 4, length: 2))
     }
 
     // MARK: 包裹类命令(加粗/斜体/删除线)

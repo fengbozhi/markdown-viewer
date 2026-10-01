@@ -315,6 +315,46 @@ enum MarkdownRenderer {
         .footnote-ref a { text-decoration: none; }
         .footnote-backref { text-decoration: none; margin-left: 4px; opacity: 0.7; }
         .katex-display { margin: 16px 0; overflow-x: auto; overflow-y: hidden; }
+        /* GitHub/Obsidian 风格 Callout 提示框 */
+        .mdv-callout {
+          border: 1px solid var(--color-border-default, rgba(128,128,128,0.25));
+          border-left: 4px solid #888;
+          border-radius: 8px;
+          padding: 10px 14px;
+          margin: 16px 0;
+          background: var(--color-canvas-subtle, rgba(128,128,128,0.05));
+        }
+        .mdv-callout > p { margin: 6px 0; }
+        .mdv-callout-title { font-weight: 600; font-size: 0.95em; }
+        /* YAML Front Matter 属性面板(Obsidian Properties 风格) */
+        .mdv-frontmatter {
+          border: 1px solid var(--color-border-default, rgba(128,128,128,0.25));
+          border-radius: 10px;
+          margin: 0 0 24px;
+          font-size: 0.9em;
+          overflow: hidden;
+        }
+        .mdv-fm-head {
+          padding: 8px 14px;
+          font-weight: 600;
+          background: var(--color-canvas-subtle, rgba(128,128,128,0.08));
+          border-bottom: 1px solid var(--color-border-default, rgba(128,128,128,0.2));
+        }
+        .mdv-fm-row {
+          display: flex;
+          padding: 6px 14px;
+          border-top: 1px solid var(--color-border-muted, rgba(128,128,128,0.12));
+        }
+        .mdv-fm-key { width: 130px; flex-shrink: 0; color: var(--color-fg-muted, #666); font-weight: 500; }
+        .mdv-fm-val { word-break: break-word; }
+        /* 任务列表复选框(可点击) */
+        .markdown-body input[type="checkbox"] {
+          cursor: pointer;
+          width: 15px;
+          height: 15px;
+          margin: 0 6px 0 0;
+          vertical-align: -2px;
+        }
         .mdv-transform {
           display: inline-flex;
           align-items: center;
@@ -391,6 +431,9 @@ enum MarkdownRenderer {
 
         try {
           var MD = \(mdLiteral);
+          // 0) 提取 YAML Front Matter(渲染为属性面板)
+          var fm = extractFrontMatter(MD);
+          MD = fm.md;
           // 1) 提取脚注定义 [^id]: 文本
           var footnoteDefs = extractFootnoteDefs(MD);
           MD = footnoteDefs.md;
@@ -428,7 +471,15 @@ enum MarkdownRenderer {
           renderFootnotes(contentEl, footnoteDefs.defs);
           // 8) 扩展语法:==高亮== / ~下标~ / ^上标^
           renderInlineExtras(contentEl);
-          // 9) 代码高亮(跳过 mermaid)
+          // 9) GitHub/Obsidian 风格 Callout(> [!NOTE] / [!TIP] / [!WARNING] ...)
+          renderCallouts(contentEl);
+          // 10) Emoji 短代码(:smile: → 😄)
+          renderEmojis(contentEl);
+          // 11) 任务列表复选框:可点击,点击后回写源文件
+          enableTaskCheckboxes();
+          // 12) Front Matter 属性面板(置于文档顶部)
+          renderFrontMatter(contentEl, fm.data);
+          // 13) 代码高亮(跳过 mermaid)
           if (window.hljs) {
             hljs.configure({ ignoreUnescapedHTML: true });
             document.querySelectorAll("pre code").forEach(function (el) {
@@ -437,11 +488,11 @@ enum MarkdownRenderer {
               }
             });
           }
-          // 10) 美化图片转换说明: ![原图名](本地路径) -> ![VL模型描述](MinIO URL)
+          // 14) 美化图片转换说明: ![原图名](本地路径) -> ![VL模型描述](MinIO URL)
           applyImageTransforms(contentEl);
-          // 11) Carbon 风格代码块:窗口按钮 + 语言标签 + 复制按钮 + 行号
+          // 15) Carbon 风格代码块:窗口按钮 + 语言标签 + 复制按钮 + 行号
           styleCodeBlocks();
-          // 12) Mermaid 流程图渲染:把 ```mermaid 代码块转换为图表
+          // 16) Mermaid 流程图渲染:把 ```mermaid 代码块转换为图表
           if (window.mermaid) {
             mermaid.initialize({
               startOnLoad: false,
@@ -824,6 +875,180 @@ enum MarkdownRenderer {
             var span = document.createElement("span");
             span.innerHTML = html;
             node.parentNode.replaceChild(span, node);
+          });
+        }
+
+        // ---- YAML Front Matter:提取文档头部 ---...--- 元数据 ----
+        function extractFrontMatter(md) {
+          var m = md.match(/^---[^\\S\\n]*\\n([\\s\\S]*?)\\n---[^\\S\\n]*(?:\\n|$)/);
+          if (!m) return { md: md, data: null };
+          var lines = m[1].split("\\n");
+          var rows = [];
+          function stripQuote(s) { return s.replace(/^["']|["']$/g, ""); }
+          for (var i = 0; i < lines.length; i++) {
+            var km = lines[i].match(/^([^:\\n]+):[^\\S\\n]*(.*)$/);
+            if (!km) continue;
+            var key = km[1].trim();
+            if (!key || key.charAt(0) === "-") continue;
+            var val = stripQuote(km[2].trim());
+            if (val === "") {
+              // 数组形式:后续缩进的 - item 行
+              var items = [];
+              while (i + 1 < lines.length && /^\\s+-\\s+/.test(lines[i + 1])) {
+                i++;
+                items.push(stripQuote(lines[i].replace(/^\\s+-\\s+/, "").trim()));
+              }
+              rows.push([key, items.join(", ")]);
+              continue;
+            }
+            // 行内数组 [a, b]
+            var am = val.match(/^\\[(.*)\\]$/);
+            if (am) {
+              val = am[1].split(",").map(function (s) { return stripQuote(s.trim()); }).filter(Boolean).join(", ");
+            }
+            rows.push([key, val]);
+          }
+          return { md: md.slice(m[0].length), data: rows.length ? rows : null };
+        }
+
+        // ---- Front Matter 属性面板渲染 ----
+        function renderFrontMatter(root, data) {
+          if (!data || !data.length) return;
+          function esc(s) { return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;"); }
+          var html = '<div class="mdv-fm-head">📋 属性</div>';
+          data.forEach(function (kv) {
+            html += '<div class="mdv-fm-row"><span class="mdv-fm-key">' + esc(kv[0]) +
+                    '</span><span class="mdv-fm-val">' + esc(kv[1] || "—") + "</span></div>";
+          });
+          var el = document.createElement("div");
+          el.className = "mdv-frontmatter";
+          el.innerHTML = html;
+          root.insertBefore(el, root.firstChild);
+        }
+
+        // ---- GitHub/Obsidian 风格 Callout(> [!TYPE]) ----
+        // 注意:用函数包裹数据表,利用函数声明提升,保证 try 块中可调用(var 赋值不提升)
+        function calloutDefs() { return {
+          note: ["#0969da", "ℹ️", "Note"], info: ["#0969da", "ℹ️", "Info"], todo: ["#0969da", "☑️", "Todo"],
+          tip: ["#1a7f37", "💡", "Tip"], success: ["#1a7f37", "✅", "Success"],
+          check: ["#1a7f37", "✅", "Success"], done: ["#1a7f37", "✅", "Success"],
+          important: ["#8250df", "❗", "Important"], example: ["#8250df", "📝", "Example"],
+          warning: ["#9a6700", "⚠️", "Warning"], question: ["#9a6700", "❓", "Question"],
+          help: ["#9a6700", "❓", "Question"], faq: ["#9a6700", "❓", "Question"],
+          caution: ["#cf222e", "🔥", "Caution"], danger: ["#cf222e", "🔥", "Danger"],
+          error: ["#cf222e", "🔥", "Error"], failure: ["#cf222e", "❌", "Failure"],
+          fail: ["#cf222e", "❌", "Failure"], missing: ["#cf222e", "❌", "Missing"], bug: ["#cf222e", "🐛", "Bug"],
+          quote: ["#57606a", "💬", "Quote"], cite: ["#57606a", "💬", "Quote"],
+          abstract: ["#0e7490", "📄", "Abstract"], summary: ["#0e7490", "📄", "Abstract"]
+        }; }
+        function renderCallouts(root) {
+          var CALLOUT_DEFS = calloutDefs();
+          root.querySelectorAll("blockquote").forEach(function (bq) {
+            var first = bq.querySelector("p");
+            if (!first) return;
+            var m = first.innerHTML.match(/^\\s*\\[!([A-Za-z]+)\\](<br\\s*\\/?>)?/);
+            if (!m) return;
+            var def = CALLOUT_DEFS[m[1].toLowerCase()];
+            if (!def) return;
+            first.innerHTML = first.innerHTML.slice(m[0].length);
+            if (!first.innerHTML.trim()) first.remove();
+            var box = document.createElement("div");
+            box.className = "mdv-callout";
+            box.style.borderLeftColor = def[0];
+            var title = document.createElement("div");
+            title.className = "mdv-callout-title";
+            title.style.color = def[0];
+            title.textContent = def[1] + " " + def[2];
+            box.appendChild(title);
+            while (bq.firstChild) box.appendChild(bq.firstChild);
+            bq.parentNode.replaceChild(box, bq);
+          });
+        }
+
+        // ---- Emoji 短代码(:smile: → 😄,GitHub/Obsidian 风格) ----
+        function emojiMap() { return {
+          "smile":"😄","smiley":"😃","grin":"😁","laughing":"😆","joy":"😂","rofl":"🤣",
+          "wink":"😉","blush":"😊","yum":"😋","sunglasses":"😎","nerd_face":"🤓","thinking":"🤔",
+          "neutral_face":"😐","expressionless":"😑","sleeping":"😴","mask":"😷","cry":"😢","sob":"😭",
+          "angry":"😠","rage":"😡","scream":"😱","confused":"😕","upside_down_face":"🙃",
+          "rolling_eyes":"🙄","zipper_mouth_face":"🤐","lying_face":"🤥","sweat_smile":"😅",
+          "grimacing":"😬","hugs":"🤗","star_struck":"🤩","partying_face":"🥳",
+          "heart":"❤️","orange_heart":"🧡","yellow_heart":"💛","green_heart":"💚","blue_heart":"💙",
+          "purple_heart":"💜","black_heart":"🖤","broken_heart":"💔","sparkling_heart":"💖","two_hearts":"💕",
+          "thumbsup":"👍","+1":"👍","thumbsdown":"👎","-1":"👎","ok_hand":"👌","clap":"👏",
+          "raised_hands":"🙌","pray":"🙏","muscle":"💪","wave":"👋","point_up":"☝️","point_down":"👇",
+          "point_left":"👈","point_right":"👉","v":"✌️","handshake":"🤝","writing_hand":"✍️",
+          "eyes":"👀","eye":"👁️","brain":"🧠","speech_balloon":"💬","thought_balloon":"💭","zzz":"💤",
+          "fire":"🔥","sparkles":"✨","star":"⭐","star2":"🌟","zap":"⚡","boom":"💥","dizzy":"💫",
+          "sunny":"☀️","cloud":"☁️","rainbow":"🌈","snowflake":"❄️","umbrella":"☔","ocean":"🌊",
+          "rocket":"🚀","airplane":"✈️","car":"🚗","taxi":"🚕","bus":"🚌","train":"🚆","ship":"🚢","anchor":"⚓",
+          "tada":"🎉","confetti_ball":"🎊","balloon":"🎈","gift":"🎁","trophy":"🏆","medal":"🏅",
+          "100":"💯","check":"✔️","white_check_mark":"✅","x":"❌","no_entry":"⛔","warning":"⚠️",
+          "question":"❓","exclamation":"❗","bangbang":"‼️","bulb":"💡","mag":"🔍","mag_right":"🔎",
+          "lock":"🔒","unlock":"🔓","key":"🔑","hammer":"🔨","wrench":"🔧","gear":"⚙️","link":"🔗",
+          "paperclip":"📎","pushpin":"📌","scissors":"✂️","calendar":"📅","memo":"📝","pencil2":"✏️",
+          "book":"📖","books":"📚","notebook":"📓","bookmark":"🔖","label":"🏷️",
+          "computer":"💻","keyboard":"⌨️","iphone":"📱","email":"📧","inbox_tray":"📥","outbox_tray":"📤",
+          "hourglass":"⌛","watch":"⌚","battery":"🔋","money_with_wings":"💸","gem":"💎",
+          "house":"🏠","office":"🏢","hospital":"🏥","school":"🏫","church":"⛪",
+          "bug":"🐛","robot":"🤖","ghost":"👻","alien":"👽","skull":"💀","poop":"💩",
+          "cat":"🐱","dog":"🐶","mouse":"🐭","rabbit":"🐰","fox_face":"🦊","bear":"🐻","panda_face":"🐼",
+          "tiger":"🐯","lion":"🦁","pig":"🐷","frog":"🐸","monkey":"🐵","chicken":"🐔","penguin":"🐧",
+          "bird":"🐦","unicorn":"🦄","bee":"🐝","turtle":"🐢","snake":"🐍","octopus":"🐙","fish":"🐟","whale":"🐳",
+          "apple":"🍎","banana":"🍌","grapes":"🍇","strawberry":"🍓","watermelon":"🍉","peach":"🍑",
+          "cherries":"🍒","pineapple":"🍍","mango":"🥭","lemon":"🍋","avocado":"🥑","tomato":"🍅",
+          "bread":"🍞","cheese":"🧀","egg":"🥚","hamburger":"🍔","pizza":"🍕","taco":"🌮","sushi":"🍣",
+          "ramen":"🍜","rice":"🍚","ice_cream":"🍨","cake":"🍰","birthday":"🎂","chocolate_bar":"🍫","candy":"🍬",
+          "coffee":"☕","tea":"🍵","beer":"🍺","beers":"🍻","wine_glass":"🍷","cocktail":"🍸","milk":"🥛",
+          "soccer":"⚽","basketball":"🏀","football":"🏈","baseball":"⚾","tennis":"🎾","volleyball":"🏐",
+          "dart":"🎯","video_game":"🎮","game_die":"🎲","chess_pawn":"♟️","guitar":"🎸","microphone":"🎤",
+          "headphones":"🎧","art":"🎨","clapper":"🎬","camera":"📷","movie_camera":"🎥"
+        }; }
+        function renderEmojis(root) {
+          var EMOJI_MAP = emojiMap();
+          var re = /:([a-zA-Z0-9_+\\-]+):/g;
+          function hasEmoji(text) {
+            re.lastIndex = 0;
+            var m;
+            while ((m = re.exec(text)) !== null) { if (EMOJI_MAP[m[1]]) return true; }
+            return false;
+          }
+          var walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+            acceptNode: function (node) {
+              var el = node.parentElement;
+              if (!el || el.closest("pre, code, script, style, .katex")) return NodeFilter.FILTER_REJECT;
+              return hasEmoji(node.nodeValue) ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+            }
+          });
+          var nodes = [];
+          while (walker.nextNode()) nodes.push(walker.currentNode);
+          nodes.forEach(function (node) {
+            re.lastIndex = 0;
+            var text = node.nodeValue;
+            var out = "", last = 0, m, changed = false;
+            while ((m = re.exec(text)) !== null) {
+              var e = EMOJI_MAP[m[1]];
+              if (!e) continue;
+              changed = true;
+              out += text.slice(last, m.index) + e;
+              last = m.index + m[0].length;
+            }
+            if (changed) node.nodeValue = out + text.slice(last);
+          });
+        }
+
+        // ---- 任务列表复选框:可点击,点击事件上报原生回写源文件 ----
+        function enableTaskCheckboxes() {
+          document.querySelectorAll('input[type="checkbox"]').forEach(function (cb, idx) {
+            cb.removeAttribute("disabled");
+            cb.addEventListener("change", function () {
+              var handlers = (window.webkit && window.webkit.messageHandlers) || {};
+              if (handlers.taskToggle) {
+                handlers.taskToggle.postMessage({ index: idx, checked: !!cb.checked });
+              } else {
+                cb.checked = !cb.checked;   // 无桥接环境(如导出 HTML)时还原状态
+              }
+            });
           });
         }
 

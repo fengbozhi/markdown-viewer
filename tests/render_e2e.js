@@ -16,6 +16,9 @@ window.eval(scripts[scripts.length - 1]);
 
 setTimeout(() => {
   const doc = window.document;
+  // 注意:不能用 body.textContent(script 标签源码也会被计入),只取渲染容器
+  const bodyText = doc.getElementById("content").textContent;
+  const codeText = doc.querySelector("pre code")?.textContent || "";
   const checks = [
     ["KaTeX 行内公式渲染", doc.querySelectorAll(".katex").length >= 2],
     ["KaTeX 块级公式", doc.querySelectorAll(".katex-display").length >= 1],
@@ -31,8 +34,21 @@ setTimeout(() => {
     ["代码复制按钮", !!doc.querySelector(".code-copy-btn")],
     ["语言标签", [...doc.querySelectorAll(".code-lang")].some(e => e.textContent === "swift")],
     ["代码行号", !!doc.querySelector(".code-line")],
-    ["代码块内 $x$ 未渲染为公式", doc.querySelector("pre code") && doc.querySelector("pre code").textContent.includes("$x$")],
+    ["代码块内 $x$ 未渲染为公式", codeText.includes("$x$")],
+    ["代码块内 :smile: 未转换", codeText.includes(":smile:")],
     ["MDV 搜索接口存在", typeof window.MDV?.search === "function"],
+    // v3 新功能
+    ["Callout 渲染", doc.querySelectorAll(".mdv-callout").length >= 2],
+    ["Callout 标题与颜色", [...doc.querySelectorAll(".mdv-callout-title")].some(e => e.textContent.includes("Warning") && e.style.color.length > 0)],
+    ["Callout 无残留 blockquote 标记", !bodyText.includes("[!NOTE]")],
+    ["Emoji 短代码转换", bodyText.includes("😄") && bodyText.includes("🚀") && bodyText.includes("❤️")],
+    ["Front Matter 属性面板", !!doc.querySelector(".mdv-frontmatter")],
+    ["Front Matter 键值", [...doc.querySelectorAll(".mdv-fm-key")].some(e => e.textContent === "title") && [...doc.querySelectorAll(".mdv-fm-val")].some(e => e.textContent === "测试文档")],
+    ["Front Matter 数组展开", [...doc.querySelectorAll(".mdv-fm-val")].some(e => e.textContent === "markdown, 测试")],
+    ["Front Matter 原文不显示", !bodyText.includes("draft: false")],
+    ["任务复选框渲染", doc.querySelectorAll('input[type="checkbox"]').length === 2],
+    ["任务复选框可点击(disabled 移除)", [...doc.querySelectorAll('input[type="checkbox"]')].every(cb => !cb.disabled)],
+    ["已完成任务勾选状态", [...doc.querySelectorAll('input[type="checkbox"]')].some(cb => cb.checked)],
   ];
   let fail = 0;
   for (const [name, ok] of checks) { console.log((ok ? "PASS" : "FAIL") + "  " + name); if (!ok) fail++; }
